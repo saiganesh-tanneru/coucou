@@ -19,6 +19,9 @@ jobs:
       - name: Generate Xcode project
         run: cd NotchBuddy && xcodegen
 
+      - name: Run Antigravity Permission Tests
+        run: bash scripts/test-agy-permissions.sh
+
       - name: Build Release (unsigned)
         run: |
           set -o pipefail
@@ -33,12 +36,18 @@ jobs:
 
       - name: Compress App
         run: |
-          cd DerivedData/Build/Products/Release
-          zip -r -y Coucou.zip Coucou.app
+          APP_PATH=$(find ./DerivedData -name "Coucou.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find . -name "Coucou.app" -type d | head -n 1)
+          fi
+          echo "Found app at: $APP_PATH"
+          APP_DIR=$(dirname "$APP_PATH")
+          mkdir -p ./dist
+          (cd "$APP_DIR" && zip -r -y "$GITHUB_WORKSPACE/dist/Coucou.zip" Coucou.app)
 
       - name: Upload Coucou.app Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Coucou-macOS
-          path: DerivedData/Build/Products/Release/Coucou.zip
+          path: dist/Coucou.zip
           retention-days: 14
