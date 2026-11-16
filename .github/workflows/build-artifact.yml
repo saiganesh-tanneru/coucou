@@ -1,0 +1,44 @@
+name: Build and Upload Coucou
+
+on:
+  push:
+    branches: [main, fix-antigravity-notch-approvals]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build Coucou macOS App
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: cd NotchBuddy && xcodegen
+
+      - name: Build Release (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project NotchBuddy/NotchBuddy.xcodeproj \
+            -scheme NotchBuddy \
+            -configuration Release \
+            -derivedDataPath ./DerivedData \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Compress App
+        run: |
+          cd DerivedData/Build/Products/Release
+          zip -r -y Coucou.zip Coucou.app
+
+      - name: Upload Coucou.app Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coucou-macOS
+          path: DerivedData/Build/Products/Release/Coucou.zip
+          retention-days: 14

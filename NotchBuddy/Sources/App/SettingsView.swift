@@ -50,7 +50,7 @@ struct SettingsView: View {
     @State private var showAgyDiff: Bool = false
     @State private var pendingAgyJSON: String = ""
     @State private var agyPendingInstall: Bool = true
-    @AppStorage(HookServer.agyApprovalsKey) private var agyApprovalsEnabled = false
+    @AppStorage(HookServer.agyApprovalsKey) private var agyApprovalsEnabled = true
     @State private var agyHookTimeout: Int? = HookServer.agyPreToolTimeout()
 
     @State private var codexHooksInstalled: Bool = HookServer.codexHooksInstalled()

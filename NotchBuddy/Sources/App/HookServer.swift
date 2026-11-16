@@ -1211,17 +1211,43 @@ final class HookServer: @unchecked Sendable {
         #if APPSTORE
         return nil
         #else
-        guard UserDefaults.standard.bool(forKey: agyApprovalsKey),
+        let enabled = UserDefaults.standard.object(forKey: agyApprovalsKey) as? Bool ?? true
+        guard enabled,
               payload["coucou_agent"] as? String == "antigravity" else { return nil }
-        let tool = payload["tool_name"] as? String ?? ""
-        guard tool == "run_command" || tool.hasSuffix(":run_command") else { return nil }
+        let rawTool = payload["tool_name"] as? String ?? ""
+        let tool = rawTool.contains(":") ? String(rawTool.split(separator: ":").last ?? "") : rawTool
+        guard !tool.isEmpty else { return nil }
+
         let input = payload["tool_input"] as? [String: Any] ?? [:]
-        let command = (input["command"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !command.isEmpty else { return nil }
-        // Coucou gives up 10 s before Antigravity stops waiting for the hook.
-        guard let timeout = agyPreToolTimeout(), timeout >= agyApprovalHookTimeout else { return nil }
+        let command: String
         let rules = AgyPermissionRules.load(cwd: payload["cwd"] as? String ?? "")
-        guard rules.verdict(for: command) == .unknown else { return nil }
+
+        if tool == "run_command" {
+            command = (input["command"] as? String ?? input["CommandLine"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !command.isEmpty else { return nil }
+            guard rules.verdict(for: command) == .unknown else { return nil }
+        } else if tool == "write_file" || tool == "edit_file" {
+            let path = (input["path"] as? String ?? input["file_path"] as? String ?? input["Path"] as? String ?? input["FilePath"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else { return nil }
+            guard !rules.isFileAllowed(path: path, tool: tool) else { return nil }
+            command = "\(tool): \(path)"
+        } else if tool == "call_mcp_tool" {
+            let toolName = input["ToolName"] as? String ?? input["tool_name"] as? String ?? "mcp"
+            let serverName = input["ServerName"] as? String ?? input["server_name"] as? String ?? ""
+            command = serverName.isEmpty ? "mcp: \(toolName)" : "mcp: \(serverName)/\(toolName)"
+        } else {
+            let summary = input.keys.sorted().prefix(2).compactMap { k in
+                if let v = input[k] as? String { return "\(k): \(v.prefix(40))" }
+                return nil
+            }.joined(separator: ", ")
+            command = summary.isEmpty ? tool : "\(tool)(\(summary))"
+        }
+
+        // Coucou gives up 10 s before Antigravity stops waiting for the hook.
+        let timeout = agyPreToolTimeout() ?? agyApprovalHookTimeout
+        guard timeout >= 30 else { return nil }
         return (command, min(Double(timeout - 10), 110))
         #endif
     }

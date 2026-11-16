@@ -16,8 +16,13 @@ struct AgyPermissionRules: Equatable, Sendable {
     /// The text inside each `command(...)` rule.
     private(set) var allow: [String] = []
     private(set) var deny: [String] = []
+    private(set) var fileGrants: [String: Set<String>] = [:]
 
     enum Verdict: Equatable, Sendable { case allowed, denied, unknown }
+
+    static func == (lhs: AgyPermissionRules, rhs: AgyPermissionRules) -> Bool {
+        lhs.allow == rhs.allow && lhs.deny == rhs.deny
+    }
 
     init(allow: [String] = [], deny: [String] = []) {
         self.allow = allow
@@ -25,10 +30,30 @@ struct AgyPermissionRules: Equatable, Sendable {
     }
 
     /// Adds the `command(...)` entries of a grants object: `{"allow": [...], "deny": [...]}`.
-    /// Other rule kinds (read_file, mcp, read_url…) do not apply to shell commands.
+    /// Also records non-command rules (write_file, edit_file, etc.) for file tool gating.
     mutating func add(grants: [String: Any]) {
-        allow += Self.commandRules(grants["allow"] as? [String] ?? [])
-        deny += Self.commandRules(grants["deny"] as? [String] ?? [])
+        let allowList = grants["allow"] as? [String] ?? []
+        let denyList = grants["deny"] as? [String] ?? []
+        allow += Self.commandRules(allowList)
+        deny += Self.commandRules(denyList)
+        for entry in allowList {
+            let trimmed = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let openParen = trimmed.firstIndex(of: "("), trimmed.hasSuffix(")") {
+                let kind = String(trimmed[..<openParen])
+                let arg = String(trimmed[trimmed.index(after: openParen)..<trimmed.index(before: trimmed.endIndex)])
+                fileGrants[kind, default: []].insert(arg)
+            }
+        }
+    }
+
+    /// True when a path is covered by an allow grant for this tool (e.g. write_file(/path)).
+    func isFileAllowed(path: String, tool: String) -> Bool {
+        guard let granted = fileGrants[tool] else { return false }
+        let stdPath = (path as NSString).standardizingPath
+        return granted.contains { allowed in
+            let stdAllowed = (allowed as NSString).standardizingPath
+            return stdPath == stdAllowed || stdPath.hasPrefix(stdAllowed + "/")
+        }
     }
 
     /// What Antigravity's rules say about `command`.
@@ -174,7 +199,8 @@ struct AgyPermissionRules: Equatable, Sendable {
                      cwd: String) -> AgyPermissionRules {
         var rules = AgyPermissionRules()
         let gemini = home.appendingPathComponent(".gemini")
-        if let settings = readObject(gemini.appendingPathComponent("antigravity-cli/settings.json")),
+        if let settings = readObject(gemini.appendingPathComponent("settings.json"))
+            ?? readObject(gemini.appendingPathComponent("antigravity-cli/settings.json")),
            let permissions = settings["permissions"] as? [String: Any] {
             rules.add(grants: permissions)
         }
