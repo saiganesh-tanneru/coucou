@@ -122,6 +122,14 @@ enum AgyPermissionRulesTests {
         precondition(empty == AgyPermissionRules())
         precondition(empty.verdict(for: "ls") == .unknown)
 
+        // File permission tests
+        var fileRules = AgyPermissionRules()
+        fileRules.add(grants: ["allow": ["write_file(/work/app/src)", "edit_file(/work/app/README.md)"]])
+        precondition(fileRules.isFileAllowed(path: "/work/app/src/main.swift", tool: "write_file"))
+        precondition(fileRules.isFileAllowed(path: "/work/app/README.md", tool: "edit_file"))
+        precondition(!fileRules.isFileAllowed(path: "/work/app/other.txt", tool: "write_file"))
+        precondition(!fileRules.isFileAllowed(path: "/work/app/README.md", tool: "write_file"))
+
         print("AgyPermissionRules: all tests passed")
     }
 }
