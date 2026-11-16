@@ -4105,6 +4105,26 @@ def main():
     if agent == 'antigravity' and event == 'PreToolUse':
         out = {'decision': 'ask'}
         try:
+            # Format any tool (write_file, edit_file, MCP, etc.) so it can be approved in the notch
+            tool_name = payload.get('tool_name', '')
+            if tool_name and tool_name != 'run_command' and not tool_name.endswith(':run_command'):
+                tool_input = payload.get('tool_input', {})
+                desc = ""
+                if 'path' in tool_input or 'Path' in tool_input:
+                    desc = tool_input.get('path') or tool_input.get('Path') or ''
+                elif 'file_path' in tool_input or 'FilePath' in tool_input:
+                    desc = tool_input.get('file_path') or tool_input.get('FilePath') or ''
+                elif 'ToolName' in tool_input:
+                    server = tool_input.get('ServerName', '')
+                    desc = f"{server}/{tool_input['ToolName']}" if server else tool_input['ToolName']
+                else:
+                    for k in sorted(tool_input.keys()):
+                        if isinstance(tool_input[k], (str, int, float, bool)):
+                            desc = f"{k}={str(tool_input[k])[:40]}"
+                            break
+                payload['tool_name'] = 'run_command'
+                payload['tool_input'] = {'command': f"{tool_name}: {desc}" if desc else tool_name}
+
             payload['coucou_kind'] = 'agy_pre_tool'
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(3)
@@ -4524,6 +4544,26 @@ def main():
     if agent == 'antigravity' and event == 'PreToolUse':
         out = {'decision': 'ask'}
         try:
+            # Format any tool (write_file, edit_file, MCP, etc.) so it can be approved in the notch
+            tool_name = payload.get('tool_name', '')
+            if tool_name and tool_name != 'run_command' and not tool_name.endswith(':run_command'):
+                tool_input = payload.get('tool_input', {})
+                desc = ""
+                if 'path' in tool_input or 'Path' in tool_input:
+                    desc = tool_input.get('path') or tool_input.get('Path') or ''
+                elif 'file_path' in tool_input or 'FilePath' in tool_input:
+                    desc = tool_input.get('file_path') or tool_input.get('FilePath') or ''
+                elif 'ToolName' in tool_input:
+                    server = tool_input.get('ServerName', '')
+                    desc = f"{server}/{tool_input['ToolName']}" if server else tool_input['ToolName']
+                else:
+                    for k in sorted(tool_input.keys()):
+                        if isinstance(tool_input[k], (str, int, float, bool)):
+                            desc = f"{k}={str(tool_input[k])[:40]}"
+                            break
+                payload['tool_name'] = 'run_command'
+                payload['tool_input'] = {'command': f"{tool_name}: {desc}" if desc else tool_name}
+
             payload['coucou_kind'] = 'agy_pre_tool'
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(3)
